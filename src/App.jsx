@@ -4,6 +4,7 @@ import AppShell from './components/AppShell';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
+import SetPassword from './pages/SetPassword';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Categories from './pages/Categories';
@@ -24,6 +25,7 @@ export default function App() {
           {/* Pre-auth (no app shell) */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/set-password" element={<SetPassword />} />
 
           {/* Authenticated app */}
           <Route element={<AppShell />}>
