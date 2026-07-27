@@ -8,7 +8,6 @@ import { useApp, ROLES } from '../context/AppContext';
 import Logo from './Logo';
 import Avatar from './ui/Avatar';
 import NotificationBell from './NotificationBell';
-import { getPrimaryTenant } from '../data/mock';
 import { cn } from '../lib/utils';
 
 // Role-based navigation. The visible items change with the active role so the
@@ -42,7 +41,7 @@ const NAV = {
 };
 
 function RoleSwitcher() {
-  const { role, setRole } = useApp();
+  const { role, previewRole, setPreviewRole, isAuthenticated } = useApp();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -54,18 +53,25 @@ function RoleSwitcher() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  // When signed in, the real role from /me takes precedence. The switcher stays
+  // visible (it's referenced in the A2 docs) but is locked to the real role.
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 h-9 text-[13px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition-colors cursor-pointer"
-        title="Switch role to preview access (demonstrates role-based access control)"
+        onClick={() => { if (!isAuthenticated) setOpen((o) => !o); }}
+        disabled={isAuthenticated}
+        title={
+          isAuthenticated
+            ? 'Your role comes from your signed-in account'
+            : 'Switch role to preview access (demonstrates role-based access control)'
+        }
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 h-9 text-[13px] font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-100 disabled:cursor-default disabled:hover:bg-white cursor-pointer"
       >
         <span className="text-slate-400">Viewing as</span>
         <span className="text-slate-900">{role}</span>
-        <ChevronsUpDown size={14} className="text-slate-400" />
+        {!isAuthenticated && <ChevronsUpDown size={14} className="text-slate-400" />}
       </button>
-      {open && (
+      {open && !isAuthenticated && (
         <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-lg z-50">
           <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             Preview role
@@ -74,16 +80,16 @@ function RoleSwitcher() {
             <button
               key={r}
               onClick={() => {
-                setRole(r);
+                setPreviewRole(r);
                 setOpen(false);
               }}
               className={cn(
                 'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer',
-                r === role ? 'bg-teal-light text-teal-dark font-medium' : 'text-slate-700 hover:bg-slate-50',
+                r === previewRole ? 'bg-teal-light text-teal-dark font-medium' : 'text-slate-700 hover:bg-slate-50',
               )}
             >
               {r}
-              {r === role && <Check size={15} className="text-teal-brand" />}
+              {r === previewRole && <Check size={15} className="text-teal-brand" />}
             </button>
           ))}
         </div>
@@ -93,10 +99,10 @@ function RoleSwitcher() {
 }
 
 function Sidebar() {
-  const { role } = useApp();
+  const { role, tenant, signOut } = useApp();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const items = NAV[role] ?? [];
-  const tenant = getPrimaryTenant();
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-slate-200 bg-white">
@@ -145,13 +151,13 @@ function Sidebar() {
       </nav>
 
       <div className="border-t border-slate-100 p-3">
-        <Link
-          to="/login"
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+        <button
+          onClick={async () => { await signOut(); navigate('/login'); }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
         >
           <LogOut size={18} className="text-slate-400" />
           Sign out
-        </Link>
+        </button>
       </div>
     </aside>
   );

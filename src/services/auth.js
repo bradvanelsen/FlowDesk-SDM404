@@ -23,9 +23,30 @@ export async function getSession() {
   return supabase.auth.getSession();
 }
 
-// Set the invited user's password. Requires the temporary invite session to be
-// active. Returns Supabase's { data, error } shape so the caller can render the
-// message on failure.
+// The current access token (JWT), for the API client's Authorization header.
+// Null when there's no session / Supabase isn't configured.
+export async function getAccessToken() {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.access_token ?? null;
+}
+
+// Email + password sign-in. Returns Supabase's { data, error } shape.
+export async function signInWithPassword(email, password) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase is not configured — missing .env.local.' } };
+  }
+  return supabase.auth.signInWithPassword({ email, password });
+}
+
+// Clear the session (real sign-out).
+export async function signOut() {
+  if (!supabase) return { error: null };
+  return supabase.auth.signOut();
+}
+
+// Set the invited user's password (AB#27). Requires the temporary invite session
+// to be active. Returns Supabase's { data, error } shape.
 export async function updatePassword(password) {
   if (!supabase) {
     return {

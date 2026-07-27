@@ -1,13 +1,54 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import AuthLayout from '../components/AuthLayout';
 import { Card, Input, Button } from '../components/ui';
+import { cn } from '../lib/utils';
+import { signInWithPassword } from '../services/auth';
+
+// Spinner that spins — Button's `icon` prop renders a plain icon.
+function Spinner(props) {
+  return <Loader2 {...props} className={cn(props.className, 'animate-spin')} />;
+}
+
+// Turn Supabase's technical auth errors into plain English.
+function friendlyAuthError(error) {
+  const m = (error?.message || '').toLowerCase();
+  if (m.includes('invalid login') || m.includes('invalid credentials')) {
+    return 'Incorrect email or password.';
+  }
+  if (m.includes('email not confirmed')) {
+    return 'Your email address hasn’t been confirmed yet.';
+  }
+  if (m.includes('not configured')) return error.message;
+  if (m.includes('failed to fetch') || m.includes('network')) {
+    return 'Could not reach the sign-in service. Check your connection.';
+  }
+  return error?.message || 'Sign-in failed. Please try again.';
+}
 
 export default function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('priya.nair@demoorg.example');
-  const [password, setPassword] = useState('demo-password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (submitting) return; // guard against double-submit
+    setError('');
+    setSubmitting(true);
+
+    const { error: signInError } = await signInWithPassword(email.trim(), password);
+    if (signInError) {
+      setSubmitting(false);
+      setError(friendlyAuthError(signInError));
+      return;
+    }
+    // Session established; AppContext resolves /me. Enter the app.
+    navigate('/dashboard');
+  }
 
   return (
     <AuthLayout
@@ -26,13 +67,13 @@ export default function Login() {
           Welcome back. Sign in to manage your incidents.
         </p>
 
-        <form
-          className="mt-6 space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            navigate('/dashboard');
-          }}
-        >
+        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
+              {error}
+            </div>
+          )}
+
           <Input
             id="email"
             label="Email"
@@ -41,6 +82,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@organisation.au"
+            autoComplete="email"
           />
           <Input
             id="password"
@@ -50,6 +92,7 @@ export default function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••••"
+            autoComplete="current-password"
           />
 
           <div className="flex items-center justify-between">
@@ -66,8 +109,14 @@ export default function Login() {
             </a>
           </div>
 
-          <Button type="submit" className="w-full" iconRight={ArrowRight}>
-            Sign in
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={submitting}
+            icon={submitting ? Spinner : undefined}
+            iconRight={submitting ? undefined : ArrowRight}
+          >
+            {submitting ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
       </Card>

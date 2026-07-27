@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import AppShell from './components/AppShell';
+import RequireAuth from './components/RequireAuth';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -27,7 +28,8 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/set-password" element={<SetPassword />} />
 
-          {/* Authenticated app */}
+          {/* Authenticated app — guarded: no session → /login */}
+          <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tenants" element={<Tenants />} />
@@ -40,6 +42,7 @@ export default function App() {
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/styleguide" element={<Styleguide />} />
+          </Route>
           </Route>
 
           {/* Entry point */}
