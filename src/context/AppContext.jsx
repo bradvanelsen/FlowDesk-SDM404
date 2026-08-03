@@ -24,6 +24,9 @@ export function AppProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [authUser, setAuthUser] = useState(null); // GET /me result
+  // 'ok' | 'retrying' | 'failed' — transient /me verification state, so a
+  // Supabase JWKS blip can be surfaced without logging anyone out.
+  const [meStatus, setMeStatus] = useState('ok');
   const [previewRole, setPreviewRole] = useState('Tenant Admin');
   const [notifications, setNotifications] = useState(() => getNotifications());
   const loadedToken = useRef(null); // dedupe /me across duplicate auth events
@@ -32,6 +35,50 @@ export function AppProvider({ children }) {
   // app shows the real signed-in identity, role and tenant.
   useEffect(() => {
     let active = true;
+    let retryTimer = null;
+
+    async function fetchMe(isRetry = false) {
+      try {
+        const me = await getMe();
+        if (!active) return;
+        setAuthUser(me);
+        setMeStatus('ok');
+      } catch (err) {
+        if (!active) return;
+        if (err?.status === 401) {
+          // Branch on the envelope reason, never on the status alone (§3.1.3).
+          // invalid_token can be a transient Supabase JWKS outage, during which
+          // a perfectly good token is indistinguishable from a forged one — so
+          // it must NOT destroy the session. Retry once, then keep the session
+          // and give up quietly.
+          const transient =
+            err.reason === 'invalid_token' || err.reason === 'verification_failed';
+          if (transient) {
+            if (!isRetry) {
+              setMeStatus('retrying');
+              retryTimer = setTimeout(() => fetchMe(true), 2000);
+            } else {
+              setMeStatus('failed');
+              setAuthUser(null);
+            }
+            return;
+          }
+          // Fatal 401s: missing_token / token_expired (refresh already failed
+          // upstream) / user_not_provisioned — and the reason-less 401, which
+          // is GET /me's "User tenant not found." (D-12): the account itself is
+          // broken, so treat it as fatal too. Clear the session; RequireAuth
+          // routes to /login.
+          setMeStatus('ok');
+          setAuthUser(null);
+          loadedToken.current = null;
+          await authSignOut();
+          return;
+        }
+        // Network error / 5xx is not an auth verdict — keep the session.
+        setMeStatus('failed');
+        setAuthUser(null);
+      }
+    }
 
     async function loadIdentity(sess) {
       setSession(sess);
@@ -39,18 +86,12 @@ export function AppProvider({ children }) {
       if (!token) {
         loadedToken.current = null;
         setAuthUser(null);
+        setMeStatus('ok');
         return;
       }
       if (token === loadedToken.current) return; // already loaded for this session
       loadedToken.current = token;
-      try {
-        const me = await getMe();
-        if (active) setAuthUser(me);
-      } catch (err) {
-        // Bad/expired token → treat as signed out.
-        if (active) setAuthUser(null);
-        if (err?.status === 401) await authSignOut();
-      }
+      await fetchMe();
     }
 
     getSession().then(async ({ data }) => {
@@ -65,6 +106,7 @@ export function AppProvider({ children }) {
 
     return () => {
       active = false;
+      if (retryTimer) clearTimeout(retryTimer);
       sub?.subscription?.unsubscribe();
     };
   }, []);
@@ -110,6 +152,7 @@ export function AppProvider({ children }) {
   const value = {
     authLoading,
     isAuthenticated,
+    meStatus,
     role,
     previewRole,
     setPreviewRole,
