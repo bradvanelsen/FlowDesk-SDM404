@@ -38,7 +38,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/incidents" element={<IncidentList />} />
             <Route path="/incidents/new" element={<IncidentNew />} />
-            <Route path="/incidents/:ref" element={<IncidentDetail />} />
+            <Route path="/incidents/:id" element={<IncidentDetail />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/styleguide" element={<Styleguide />} />

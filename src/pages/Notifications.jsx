@@ -1,13 +1,16 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, BellRing, Bell } from 'lucide-react';
-import { PageHeader, Card, Button, Badge } from '../components/ui';
+import { PageHeader, Card, Button } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { formatRelative, formatDateTime, cn } from '../lib/utils';
 
+// Rows navigate via incident_id — there is no human-readable incident
+// reference in the API, and the title is already inside the message.
 function NotificationRow({ n, onRead }) {
   return (
     <Link
-      to={`/incidents/${n.incidentRef}`}
+      to={`/incidents/${n.incidentId}`}
       onClick={() => onRead(n.id)}
       className={cn(
         'flex items-start gap-3.5 px-5 py-4 transition-colors hover:bg-slate-50',
@@ -22,7 +25,6 @@ function NotificationRow({ n, onRead }) {
           {n.message}
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <Badge tone="teal" className="scale-90 origin-left">{n.incidentRef}</Badge>
           <span title={formatDateTime(n.createdAt)}>{formatRelative(n.createdAt)}</span>
         </div>
       </div>
@@ -57,9 +59,22 @@ function Group({ title, icon: Icon, items, onRead, empty }) {
 }
 
 export default function Notifications() {
-  const { notifications, unreadCount, markAllRead, markRead } = useApp();
+  const { notifications, unreadCount, markAllRead, markRead, refreshNotifications } = useApp();
+  const [confirmation, setConfirmation] = useState('');
   const unread = notifications.filter((n) => !n.read);
   const read = notifications.filter((n) => n.read);
+
+  useEffect(() => {
+    refreshNotifications();
+  }, [refreshNotifications]);
+
+  async function onMarkAll() {
+    const marked = await markAllRead();
+    if (marked !== null) {
+      setConfirmation(`${marked} marked as read`);
+      setTimeout(() => setConfirmation(''), 4000);
+    }
+  }
 
   return (
     <>
@@ -67,9 +82,12 @@ export default function Notifications() {
         title="Notifications"
         subtitle={unreadCount > 0 ? `You have ${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'You are all caught up'}
         actions={
-          <Button variant="secondary" icon={Check} onClick={markAllRead} disabled={unreadCount === 0}>
-            Mark all as read
-          </Button>
+          <div className="flex items-center gap-3">
+            {confirmation && <span className="text-[13px] font-medium text-green-700">{confirmation}</span>}
+            <Button variant="secondary" icon={Check} onClick={onMarkAll} disabled={unreadCount === 0}>
+              Mark all as read
+            </Button>
+          </div>
         }
       />
 

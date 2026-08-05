@@ -1,12 +1,22 @@
+import { useEffect, useState } from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Cell,
 } from 'recharts';
-import { TrendingUp, Timer, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, Timer, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import {
   PageHeader, Card, CardHeader, StatCard, Select, SEVERITY_DOT, STATUS_DOT,
 } from '../components/ui';
 import { getDashboardStats } from '../data/mock';
+import { getVolume } from '../services/analytics';
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Axis labels come from the response's server-computed Melbourne week starts —
+// never regenerate Mondays client-side (contract §4.9).
+function weekLabel(isoDate) {
+  const [, m, d] = isoDate.split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
+}
 
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -25,7 +35,35 @@ const ChartTooltip = ({ active, payload, label }) => {
 
 export default function Analytics() {
   const stats = getDashboardStats();
-  const closureRate = Math.round((stats.byStatus.closed / stats.total) * 100);
+  // F-01 fix: zero-guard so an empty dataset renders 0%, not NaN%.
+  const closureRate = stats.total > 0 ? Math.round((stats.byStatus.closed / stats.total) * 100) : 0;
+
+  // Live volume series (tenant_admin/system_admin only — staff/reviewer 403).
+  const [volume, setVolume] = useState(null);
+  const [volumeError, setVolumeError] = useState('');
+  const [volumeLoading, setVolumeLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    getVolume()
+      .then((v) => { if (active) setVolume(v); })
+      .catch((err) => {
+        if (!active) return;
+        setVolumeError(
+          err?.status === 403
+            ? 'Analytics is available to administrators only.'
+            : err?.message || 'Could not load the volume series.',
+        );
+      })
+      .finally(() => { if (active) setVolumeLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const volumeData = (volume?.buckets ?? []).map((b) => ({
+    week: weekLabel(b.weekStart),
+    incidents: b.count,
+  }));
+  const volumeEmpty = !volumeLoading && !volumeError && volumeData.every((b) => b.incidents === 0);
 
   return (
     <>
@@ -64,23 +102,48 @@ export default function Analytics() {
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2" padded={false}>
-          <CardHeader title="Incident volume" subtitle="Reported per week — last 8 weeks" />
+          <CardHeader
+            title="Incident volume"
+            subtitle={
+              volume
+                ? `Reported per week — ${weekLabel(volume.from)} to ${weekLabel(volume.to)} (${volume.timezone} weeks, live)`
+                : 'Reported per week'
+            }
+          />
           <div className="h-72 px-3 py-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.weekly} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="vol" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0E7C7B" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#0E7C7B" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F4" vertical={false} />
-                <XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} />
-                <Tooltip content={<ChartTooltip />} />
-                <Area type="monotone" dataKey="incidents" name="Incidents" stroke="#0E7C7B" strokeWidth={2.5} fill="url(#vol)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {volumeLoading ? (
+              <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-400">
+                <Loader2 size={16} className="animate-spin" /> Loading volume…
+              </div>
+            ) : volumeError ? (
+              <div className="flex h-full items-center justify-center text-sm text-red-600">
+                {volumeError}
+              </div>
+            ) : volumeEmpty ? (
+              // "No data" is a 200 with zero-filled buckets, never a 404
+              // (contract §4.9) — render an explicit empty state.
+              <div className="flex h-full flex-col items-center justify-center gap-1 text-slate-400">
+                <TrendingUp size={22} className="text-slate-300" />
+                <p className="text-sm font-medium text-slate-500">No data yet</p>
+                <p className="text-xs">Incident volume will appear here once incidents are reported.</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={volumeData} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="vol" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0E7C7B" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#0E7C7B" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F4" vertical={false} />
+                  <XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} />
+                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="incidents" name="Incidents" stroke="#0E7C7B" strokeWidth={2.5} fill="url(#vol)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </Card>
 

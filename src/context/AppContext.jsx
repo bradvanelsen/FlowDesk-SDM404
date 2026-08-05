@@ -1,10 +1,13 @@
 import {
   createContext, useContext, useMemo, useState, useEffect, useRef, useCallback,
 } from 'react';
-import { getNotifications, getUserById, getPrimaryTenant } from '../data/mock';
+import { getUserById, getPrimaryTenant } from '../data/mock';
 import { roleLabel } from '../lib/roles';
 import { getSession, onAuthChange, signOut as authSignOut } from '../services/auth';
 import { getMe } from '../services/api';
+import {
+  listNotifications, getUnreadCount, markNotificationRead, markAllNotificationsRead,
+} from '../services/notifications';
 
 const AppContext = createContext(null);
 
@@ -32,7 +35,10 @@ export function AppProvider({ children }) {
   // session-cleared auth event; cleared by Login on the next attempt.
   const [authNotice, setAuthNotice] = useState('');
   const [previewRole, setPreviewRole] = useState('Tenant Admin');
-  const [notifications, setNotifications] = useState(() => getNotifications());
+  // Live notifications (contract §4.8) — system-generated, personal to the
+  // caller. Loaded once the real identity resolves; empty when signed out.
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const loadedToken = useRef(null); // dedupe /me across duplicate auth events
 
   // Resolve the session on load and whenever it changes, then fetch /me so the
@@ -157,14 +163,52 @@ export function AppProvider({ children }) {
     setAuthUser(null);
   }, []);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications],
-  );
-  const markAllRead = () =>
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  const markRead = (id) =>
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const [{ notifications: rows }, unread] = await Promise.all([
+        listNotifications({ limit: 50 }),
+        getUnreadCount(),
+      ]);
+      setNotifications(rows);
+      setUnreadCount(unread);
+    } catch {
+      // Non-fatal — keep whatever we already have; the bell just goes stale.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authUser) {
+      refreshNotifications();
+    } else {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  }, [authUser, refreshNotifications]);
+
+  // Idempotent server-side; the badge is re-synced from the dedicated
+  // unread-count endpoint rather than guessed locally.
+  const markRead = useCallback(async (id) => {
+    try {
+      const updated = await markNotificationRead(id);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? updated : n)));
+      getUnreadCount().then(setUnreadCount).catch(() => {});
+    } catch {
+      // Leave the row as-is; navigation still proceeds.
+    }
+  }, []);
+
+  // Returns how many rows were actually flipped (for the "N marked as read"
+  // confirmation) — a repeat call reports 0. Null on failure.
+  const markAllRead = useCallback(async () => {
+    try {
+      const { markedRead, unread } = await markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => (n.read ? n : { ...n, read: true })));
+      setUnreadCount(unread);
+      return markedRead;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const clearAuthNotice = useCallback(() => setAuthNotice(''), []);
 
@@ -184,6 +228,7 @@ export function AppProvider({ children }) {
     unreadCount,
     markAllRead,
     markRead,
+    refreshNotifications,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
