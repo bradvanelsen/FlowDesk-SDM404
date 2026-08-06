@@ -5,6 +5,7 @@ import AuthLayout from '../components/AuthLayout';
 import { Card, Input, Button } from '../components/ui';
 import { cn } from '../lib/utils';
 import { signInWithPassword } from '../services/auth';
+import { useApp } from '../context/AppContext';
 
 // Spinner that spins — Button's `icon` prop renders a plain icon.
 function Spinner(props) {
@@ -29,6 +30,9 @@ function friendlyAuthError(error) {
 
 export default function Login() {
   const navigate = useNavigate();
+  // authNotice: forced-sign-out message (e.g. account deactivated, F-02),
+  // set by AppContext before it cleared the session.
+  const { authNotice, clearAuthNotice } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +42,7 @@ export default function Login() {
     e.preventDefault();
     if (submitting) return; // guard against double-submit
     setError('');
+    if (authNotice) clearAuthNotice();
     setSubmitting(true);
 
     const { error: signInError } = await signInWithPassword(email.trim(), password);
@@ -68,6 +73,11 @@ export default function Login() {
         </p>
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          {authNotice && !error && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+              {authNotice}
+            </div>
+          )}
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
               {error}

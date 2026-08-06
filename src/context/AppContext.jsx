@@ -27,6 +27,10 @@ export function AppProvider({ children }) {
   // 'ok' | 'retrying' | 'failed' — transient /me verification state, so a
   // Supabase JWKS blip can be surfaced without logging anyone out.
   const [meStatus, setMeStatus] = useState('ok');
+  // F-02: one-shot notice rendered on the login screen after a forced
+  // sign-out (deactivated account). Set BEFORE signOut so it survives the
+  // session-cleared auth event; cleared by Login on the next attempt.
+  const [authNotice, setAuthNotice] = useState('');
   const [previewRole, setPreviewRole] = useState('Tenant Admin');
   const [notifications, setNotifications] = useState(() => getNotifications());
   const loadedToken = useRef(null); // dedupe /me across duplicate auth events
@@ -45,6 +49,19 @@ export function AppProvider({ children }) {
         setMeStatus('ok');
       } catch (err) {
         if (!active) return;
+        if (err?.status === 403 && err.reason === 'account_deactivated') {
+          // F-02 (found by TC-05-L3b): a deactivated user must be told, not
+          // silently dropped into the mock preview identity. Surface the API's
+          // own message on /login and clear the session.
+          setAuthNotice(
+            err.message || 'Your account has been deactivated. Contact your administrator.',
+          );
+          setMeStatus('ok');
+          setAuthUser(null);
+          loadedToken.current = null;
+          await authSignOut();
+          return;
+        }
         if (err?.status === 401) {
           // Branch on the envelope reason, never on the status alone (§3.1.3).
           // invalid_token can be a transient Supabase JWKS outage, during which
@@ -149,10 +166,14 @@ export function AppProvider({ children }) {
   const markRead = (id) =>
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
 
+  const clearAuthNotice = useCallback(() => setAuthNotice(''), []);
+
   const value = {
     authLoading,
     isAuthenticated,
     meStatus,
+    authNotice,
+    clearAuthNotice,
     role,
     previewRole,
     setPreviewRole,
