@@ -5,8 +5,9 @@ import { useApp } from '../context/AppContext';
 import { formatRelative } from '../lib/utils';
 
 export default function NotificationBell() {
-  const { notifications, unreadCount, markAllRead, markRead } = useApp();
+  const { notifications, unreadCount, markAllRead, markRead, refreshNotifications } = useApp();
   const [open, setOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState('');
   const ref = useRef(null);
   const navigate = useNavigate();
 
@@ -18,7 +19,20 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  // Re-pull on open so the dropdown reflects transitions since page load.
+  useEffect(() => {
+    if (open) refreshNotifications();
+  }, [open, refreshNotifications]);
+
   const latest = notifications.slice(0, 5);
+
+  async function onMarkAll() {
+    const marked = await markAllRead();
+    if (marked !== null) {
+      setConfirmation(`${marked} marked as read`);
+      setTimeout(() => setConfirmation(''), 4000);
+    }
+  }
 
   return (
     <div className="relative" ref={ref}>
@@ -46,22 +60,31 @@ export default function NotificationBell() {
                 </span>
               )}
             </div>
-            <button
-              onClick={markAllRead}
-              className="inline-flex items-center gap-1 text-xs font-medium text-teal-brand hover:text-teal-dark cursor-pointer"
-            >
-              <Check size={13} /> Mark all read
-            </button>
+            {confirmation ? (
+              <span className="text-xs font-medium text-green-700">{confirmation}</span>
+            ) : (
+              <button
+                onClick={onMarkAll}
+                className="inline-flex items-center gap-1 text-xs font-medium text-teal-brand hover:text-teal-dark cursor-pointer"
+              >
+                <Check size={13} /> Mark all read
+              </button>
+            )}
           </div>
 
           <ul className="max-h-80 overflow-y-auto">
+            {latest.length === 0 && (
+              <li className="px-4 py-6 text-center text-[13px] text-slate-400">
+                No notifications yet.
+              </li>
+            )}
             {latest.map((n) => (
               <li key={n.id}>
                 <button
                   onClick={() => {
                     markRead(n.id);
                     setOpen(false);
-                    navigate('/notifications');
+                    navigate(`/incidents/${n.incidentId}`);
                   }}
                   className="flex w-full gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100 last:border-0"
                 >
@@ -74,10 +97,8 @@ export default function NotificationBell() {
                     <span className={`block text-[13px] leading-snug ${n.read ? 'text-slate-500' : 'text-slate-800 font-medium'}`}>
                       {n.message}
                     </span>
-                    <span className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
-                      <span className="font-medium text-teal-brand">{n.incidentRef}</span>
-                      <span>·</span>
-                      <span>{formatRelative(n.createdAt)}</span>
+                    <span className="mt-1 block text-[11px] text-slate-400">
+                      {formatRelative(n.createdAt)}
                     </span>
                   </span>
                 </button>

@@ -1,44 +1,73 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, PlusCircle, Filter } from 'lucide-react';
+import { Search, PlusCircle, Filter, Loader2 } from 'lucide-react';
 import {
-  PageHeader, Card, Button, Badge, Avatar, Input, Select,
+  PageHeader, Card, Button, Badge, Avatar, Select,
   Table, THead, TH, TBody, TR, TD,
 } from '../components/ui';
-import { getIncidents, getUserById } from '../data/mock';
+import { useApp } from '../context/AppContext';
+import { listIncidents } from '../services/incidents';
+import { toApiIncidentStatus, toApiSeverity } from '../lib/incidentLabels';
 import { formatDate } from '../lib/utils';
 
 export default function IncidentList() {
   const navigate = useNavigate();
-  const all = getIncidents();
+  const { role } = useApp();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('All');
   const [severity, setSeverity] = useState('All');
+  const [incidents, setIncidents] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Status/severity are server-side query params (contract §4.5). Free-text
+  // search stays client-side — the API has no search parameter. Visibility
+  // scoping (staff = own, reviewer = assigned + unassigned, admin = tenant)
+  // is enforced server-side; never re-filter by role here.
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    const params = { limit: 100, sort: 'created_at', order: 'desc' };
+    if (status !== 'All') params.status = toApiIncidentStatus(status);
+    if (severity !== 'All') params.severity = toApiSeverity(severity);
+    listIncidents(params)
+      .then(({ incidents: rows, pagination }) => {
+        if (!active) return;
+        setIncidents(rows);
+        setTotal(pagination.total);
+      })
+      .catch((err) => {
+        if (active) setError(err?.message || 'Could not load incidents.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [status, severity]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return all
-      .filter((i) => (status === 'All' ? true : i.status === status))
-      .filter((i) => (severity === 'All' ? true : i.severity === severity))
-      .filter((i) =>
-        q === ''
-          ? true
-          : i.title.toLowerCase().includes(q) ||
-            i.reference.toLowerCase().includes(q) ||
-            i.category.toLowerCase().includes(q),
-      )
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [all, query, status, severity]);
+    if (q === '') return incidents;
+    return incidents.filter(
+      (i) => i.title.toLowerCase().includes(q) || i.category.toLowerCase().includes(q),
+    );
+  }, [incidents, query]);
 
   return (
     <>
       <PageHeader
         title="Incidents"
-        subtitle="All reported incidents across the organisation"
+        subtitle="All reported incidents you can see in your organisation"
         actions={
-          <Button icon={PlusCircle} onClick={() => navigate('/incidents/new')}>
-            New incident
-          </Button>
+          role === 'Staff' && (
+            <Button icon={PlusCircle} onClick={() => navigate('/incidents/new')}>
+              New incident
+            </Button>
+          )
         }
       />
 
@@ -49,7 +78,7 @@ export default function IncidentList() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by reference, title or category…"
+              placeholder="Search by title or category…"
               className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:border-teal-brand focus:ring-2 focus:ring-teal-brand/25"
             />
           </div>
@@ -76,34 +105,39 @@ export default function IncidentList() {
         </div>
       </Card>
 
-      <Card padded={false}>
-        <Table className="rounded-none border-0 shadow-none">
-          <THead>
-            <TR>
-              <TH>Reference</TH>
-              <TH>Title</TH>
-              <TH>Category</TH>
-              <TH>Severity</TH>
-              <TH>Status</TH>
-              <TH>Assigned to</TH>
-              <TH>Created</TH>
-            </TR>
-          </THead>
-          <TBody>
-            {filtered.map((inc) => {
-              const assignee = getUserById(inc.assignedTo);
-              return (
-                <TR key={inc.id} onClick={() => navigate(`/incidents/${inc.reference}`)}>
-                  <TD className="font-medium text-teal-brand whitespace-nowrap">{inc.reference}</TD>
-                  <TD className="max-w-[22rem] truncate font-medium text-slate-800">{inc.title}</TD>
+      {loading ? (
+        <Card className="flex items-center justify-center gap-2 py-14 text-sm text-slate-400">
+          <Loader2 size={16} className="animate-spin" /> Loading incidents…
+        </Card>
+      ) : error ? (
+        <Card className="py-14 text-center text-sm text-red-600">{error}</Card>
+      ) : (
+        <Card padded={false}>
+          <Table className="rounded-none border-0 shadow-none">
+            <THead>
+              <TR>
+                <TH>Title</TH>
+                <TH>Category</TH>
+                <TH>Severity</TH>
+                <TH>Status</TH>
+                <TH>Reported by</TH>
+                <TH>Assigned to</TH>
+                <TH>Created</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {filtered.map((inc) => (
+                <TR key={inc.id} onClick={() => navigate(`/incidents/${inc.id}`)}>
+                  <TD className="max-w-[24rem] truncate font-medium text-slate-800">{inc.title}</TD>
                   <TD className="text-slate-500 whitespace-nowrap">{inc.category}</TD>
                   <TD><Badge severity={inc.severity} dot /></TD>
                   <TD><Badge status={inc.status} /></TD>
+                  <TD className="text-slate-500 whitespace-nowrap">{inc.submittedBy?.name ?? '—'}</TD>
                   <TD>
-                    {assignee ? (
+                    {inc.assignedTo ? (
                       <div className="flex items-center gap-2 whitespace-nowrap">
-                        <Avatar name={assignee.name} size="xs" />
-                        <span className="text-slate-600">{assignee.name}</span>
+                        <Avatar name={inc.assignedTo.name} size="xs" />
+                        <span className="text-slate-600">{inc.assignedTo.name}</span>
                       </div>
                     ) : (
                       <span className="text-slate-400 italic">Unassigned</span>
@@ -111,20 +145,24 @@ export default function IncidentList() {
                   </TD>
                   <TD className="text-slate-500 whitespace-nowrap">{formatDate(inc.createdAt)}</TD>
                 </TR>
-              );
-            })}
-          </TBody>
-        </Table>
-        {filtered.length === 0 && (
-          <div className="py-14 text-center text-sm text-slate-400">
-            No incidents match your filters.
-          </div>
-        )}
-      </Card>
+              ))}
+            </TBody>
+          </Table>
+          {filtered.length === 0 && (
+            <div className="py-14 text-center text-sm text-slate-400">
+              {incidents.length === 0
+                ? 'No incidents yet.'
+                : 'No incidents match your filters.'}
+            </div>
+          )}
+        </Card>
+      )}
 
-      <p className="mt-3 text-xs text-slate-400">
-        Showing {filtered.length} of {all.length} incidents
-      </p>
+      {!loading && !error && (
+        <p className="mt-3 text-xs text-slate-400">
+          Showing {filtered.length} of {total} incident{total === 1 ? '' : 's'}
+        </p>
+      )}
     </>
   );
 }

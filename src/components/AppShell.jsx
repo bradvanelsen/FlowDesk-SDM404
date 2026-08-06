@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, Users as UsersIcon, Settings, ClipboardList,
-  Tags, Bell, PlusCircle, Inbox, ChevronsUpDown, Check, LogOut,
+  Tags, Bell, PlusCircle, Inbox, ChevronsUpDown, Check, LogOut, BarChart3,
 } from 'lucide-react';
 import { useApp, ROLES } from '../context/AppContext';
 import Logo from './Logo';
@@ -23,6 +23,7 @@ const NAV = {
   'Tenant Admin': [
     { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
     { label: 'Incidents', to: '/incidents', icon: ClipboardList, match: (p) => p === '/incidents' || /^\/incidents\/(?!new)/.test(p) },
+    { label: 'Analytics', to: '/analytics', icon: BarChart3, match: (p) => p.startsWith('/analytics') },
     { label: 'Users', to: '/users', icon: UsersIcon, match: (p) => p.startsWith('/users') },
     { label: 'Categories', to: '/categories', icon: Tags, match: (p) => p.startsWith('/categories') },
     { label: 'Notifications', to: '/notifications', icon: Bell, match: (p) => p.startsWith('/notifications') },

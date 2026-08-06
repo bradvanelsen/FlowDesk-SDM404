@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -8,7 +9,9 @@ import {
   PageHeader, StatCard, Card, CardHeader, Badge, Button,
   Table, THead, TH, TBody, TR, TD,
 } from '../components/ui';
-import { getDashboardStats, getIncidents } from '../data/mock';
+import { useApp } from '../context/AppContext';
+import { getDashboardStats } from '../data/mock';
+import { listIncidents } from '../services/incidents';
 import { formatDate } from '../lib/utils';
 
 const ChartTooltip = ({ active, payload, label }) => {
@@ -27,10 +30,19 @@ const ChartTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { role } = useApp();
+  // Charts/stat cards remain on the mock selectors (out of AB#14 scope);
+  // the recent-incidents table is live so its rows navigate by real id.
   const stats = getDashboardStats();
-  const recent = [...getIncidents()]
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 5);
+  const [recent, setRecent] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    listIncidents({ limit: 5, sort: 'created_at', order: 'desc' })
+      .then(({ incidents }) => { if (active) setRecent(incidents); })
+      .catch(() => { if (active) setRecent([]); });
+    return () => { active = false; };
+  }, []);
 
   return (
     <>
@@ -38,9 +50,11 @@ export default function Dashboard() {
         title="Dashboard"
         subtitle="Overview of incident activity across Demo Organisation"
         actions={
-          <Button icon={PlusCircle} onClick={() => navigate('/incidents/new')}>
-            New incident
-          </Button>
+          role === 'Staff' && (
+            <Button icon={PlusCircle} onClick={() => navigate('/incidents/new')}>
+              New incident
+            </Button>
+          )
         }
       />
 
@@ -116,8 +130,8 @@ export default function Dashboard() {
         <Table className="rounded-none border-0 shadow-none">
           <THead>
             <TR>
-              <TH>Reference</TH>
               <TH>Title</TH>
+              <TH>Category</TH>
               <TH>Severity</TH>
               <TH>Status</TH>
               <TH>Created</TH>
@@ -125,12 +139,12 @@ export default function Dashboard() {
           </THead>
           <TBody>
             {recent.map((inc) => (
-              <TR key={inc.id} onClick={() => navigate(`/incidents/${inc.reference}`)}>
-                <TD className="font-medium text-teal-brand">{inc.reference}</TD>
+              <TR key={inc.id} onClick={() => navigate(`/incidents/${inc.id}`)}>
                 <TD className="max-w-xs truncate font-medium text-slate-800">{inc.title}</TD>
+                <TD className="text-slate-500 whitespace-nowrap">{inc.category}</TD>
                 <TD><Badge severity={inc.severity} dot /></TD>
                 <TD><Badge status={inc.status} /></TD>
-                <TD className="text-slate-500">{formatDate(inc.createdAt)}</TD>
+                <TD className="text-slate-500 whitespace-nowrap">{formatDate(inc.createdAt)}</TD>
               </TR>
             ))}
           </TBody>
