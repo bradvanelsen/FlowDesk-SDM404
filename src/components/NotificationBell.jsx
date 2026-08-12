@@ -3,9 +3,11 @@ import { Bell, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatRelative } from '../lib/utils';
+import { useNow } from '../lib/useNow';
 
 export default function NotificationBell() {
   const { notifications, unreadCount, markAllRead, markRead, refreshNotifications } = useApp();
+  const now = useNow(); // D-23: relative times tick while the dropdown is mounted
   const [open, setOpen] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const ref = useRef(null);
@@ -98,7 +100,7 @@ export default function NotificationBell() {
                       {n.message}
                     </span>
                     <span className="mt-1 block text-[11px] text-slate-400">
-                      {formatRelative(n.createdAt)}
+                      {formatRelative(n.createdAt, now)}
                     </span>
                   </span>
                 </button>

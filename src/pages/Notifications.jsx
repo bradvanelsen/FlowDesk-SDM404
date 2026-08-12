@@ -4,10 +4,11 @@ import { Check, BellRing, Bell } from 'lucide-react';
 import { PageHeader, Card, Button } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { formatRelative, formatDateTime, cn } from '../lib/utils';
+import { useNow } from '../lib/useNow';
 
 // Rows navigate via incident_id — there is no human-readable incident
 // reference in the API, and the title is already inside the message.
-function NotificationRow({ n, onRead }) {
+function NotificationRow({ n, onRead, now }) {
   return (
     <Link
       to={`/incidents/${n.incidentId}`}
@@ -25,7 +26,7 @@ function NotificationRow({ n, onRead }) {
           {n.message}
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <span title={formatDateTime(n.createdAt)}>{formatRelative(n.createdAt)}</span>
+          <span title={formatDateTime(n.createdAt)}>{formatRelative(n.createdAt, now)}</span>
         </div>
       </div>
       {!n.read && (
@@ -37,7 +38,7 @@ function NotificationRow({ n, onRead }) {
   );
 }
 
-function Group({ title, icon: Icon, items, onRead, empty }) {
+function Group({ title, icon: Icon, items, onRead, empty, now }) {
   return (
     <Card padded={false}>
       <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-3">
@@ -50,7 +51,7 @@ function Group({ title, icon: Icon, items, onRead, empty }) {
       ) : (
         <div className="divide-y divide-slate-100">
           {items.map((n) => (
-            <NotificationRow key={n.id} n={n} onRead={onRead} />
+            <NotificationRow key={n.id} n={n} onRead={onRead} now={now} />
           ))}
         </div>
       )}
@@ -60,6 +61,7 @@ function Group({ title, icon: Icon, items, onRead, empty }) {
 
 export default function Notifications() {
   const { notifications, unreadCount, markAllRead, markRead, refreshNotifications } = useApp();
+  const now = useNow(); // D-23: one ticking clock for every row on the page
   const [confirmation, setConfirmation] = useState('');
   const unread = notifications.filter((n) => !n.read);
   const read = notifications.filter((n) => n.read);
@@ -92,8 +94,8 @@ export default function Notifications() {
       />
 
       <div className="max-w-3xl space-y-6">
-        <Group title="Unread" icon={BellRing} items={unread} onRead={markRead} empty="No unread notifications." />
-        <Group title="Earlier" icon={Bell} items={read} onRead={markRead} empty="Nothing here yet." />
+        <Group title="Unread" icon={BellRing} items={unread} onRead={markRead} now={now} empty="No unread notifications." />
+        <Group title="Earlier" icon={Bell} items={read} onRead={markRead} now={now} empty="Nothing here yet." />
       </div>
     </>
   );

@@ -1,8 +1,7 @@
 import { cn } from '../lib/utils';
 
-// FlowDesk wordmark: teal dot + "FlowDesk". `prototype` shows a small pill
-// so screenshots clearly read as a prototype, not a live system.
-export default function Logo({ size = 'md', prototype = false, className }) {
+// FlowDesk wordmark: teal dot + "FlowDesk".
+export default function Logo({ size = 'md', className }) {
   const text = size === 'lg' ? 'text-2xl' : 'text-lg';
   const dot = size === 'lg' ? 'h-7 w-7' : 'h-6 w-6';
 
@@ -15,11 +14,6 @@ export default function Logo({ size = 'md', prototype = false, className }) {
       <span className={cn('font-semibold tracking-tight text-slate-900', text)}>
         Flow<span className="text-teal-brand">Desk</span>
       </span>
-      {prototype && (
-        <span className="ml-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-200">
-          Prototype
-        </span>
-      )}
     </div>
   );
 }
