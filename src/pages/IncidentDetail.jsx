@@ -11,6 +11,7 @@ import { useApp } from '../context/AppContext';
 import { getIncident, transitionIncident, assignIncident } from '../services/incidents';
 import { listUsers } from '../services/users';
 import { formatDateTime, formatRelative } from '../lib/utils';
+import { useNow } from '../lib/useNow';
 
 function Meta({ icon: Icon, label, children }) {
   return (
@@ -203,6 +204,7 @@ export default function IncidentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { role } = useApp();
+  const now = useNow(); // D-23: audit-trail relative times tick on screen
   const [incident, setIncident] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -345,7 +347,7 @@ export default function IncidentDetail() {
                         <Avatar name={t.byName} size="xs" className="!h-5 !w-5 !text-[9px]" />
                         <span className="font-medium text-slate-500">{t.byName}</span>
                         <span>·</span>
-                        <span title={formatDateTime(t.at)}>{formatRelative(t.at)}</span>
+                        <span title={formatDateTime(t.at)}>{formatRelative(t.at, now)}</span>
                       </div>
                     </li>
                   );

@@ -1,8 +1,5 @@
 // Small shared helpers used across the prototype.
 
-// Deterministic "now" so relative timestamps are stable for screenshots.
-export const NOW = new Date('2026-06-29T10:30:00');
-
 export function cn(...parts) {
   return parts.filter(Boolean).join(' ');
 }
@@ -34,11 +31,13 @@ export function formatDateTime(value) {
   return `${formatDate(value)}, ${h}:${m} ${ampm}`;
 }
 
-// Relative to the fixed NOW above, so timestamps stay stable for screenshots.
-export function formatRelative(value) {
+// Relative to real time (D-23 — the old pinned-NOW constant made every live
+// timestamp read "just now" forever). Pass `now` from the useNow hook when the
+// text must tick on screen; the default suits one-shot formatting.
+export function formatRelative(value, now = Date.now()) {
   if (!value) return '';
   const then = new Date(value);
-  const diffMs = NOW - then;
+  const diffMs = now - then;
   const mins = Math.round(diffMs / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;

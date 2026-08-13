@@ -6,13 +6,20 @@ import {
 } from 'recharts';
 import { ClipboardList, FolderOpen, Clock, CheckCircle2, PlusCircle, ArrowUpRight } from 'lucide-react';
 import {
-  PageHeader, StatCard, Card, CardHeader, Badge, Button,
+  PageHeader, StatCard, Card, CardHeader, Badge, Button, STATUS_DOT,
   Table, THead, TH, TBody, TR, TD,
 } from '../components/ui';
 import { useApp } from '../context/AppContext';
-import { getDashboardStats } from '../data/mock';
 import { listIncidents } from '../services/incidents';
+import { getDashboardStats } from '../services/dashboard';
 import { formatDate } from '../lib/utils';
+
+const EMPTY_STATS = {
+  total: 0,
+  byStatus: { open: 0, inReview: 0, closed: 0 },
+  statusSeries: [],
+  weekly: [],
+};
 
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -31,10 +38,18 @@ const ChartTooltip = ({ active, payload, label }) => {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { role } = useApp();
-  // Charts/stat cards remain on the mock selectors (out of AB#14 scope);
-  // the recent-incidents table is live so its rows navigate by real id.
-  const stats = getDashboardStats();
+  // D-24: every figure on this page derives from the live API, scoped to the
+  // caller — totals reconcile with GET /incidents for the same login.
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [recent, setRecent] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    getDashboardStats()
+      .then((s) => { if (active) setStats(s); })
+      .catch(() => { /* leave zeros — the page still renders */ });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -96,7 +111,7 @@ export default function Dashboard() {
                   stroke="none"
                 >
                   {stats.statusSeries.map((s) => (
-                    <Cell key={s.name} fill={s.color} />
+                    <Cell key={s.name} fill={STATUS_DOT[s.name]} />
                   ))}
                 </Pie>
                 <Tooltip content={<ChartTooltip />} />
@@ -106,7 +121,7 @@ export default function Dashboard() {
               {stats.statusSeries.map((s) => (
                 <div key={s.name} className="flex items-center justify-between text-[13px]">
                   <span className="flex items-center gap-2 text-slate-600">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: STATUS_DOT[s.name] }} />
                     {s.name}
                   </span>
                   <span className="font-semibold text-slate-800 tabular-nums">{s.value}</span>

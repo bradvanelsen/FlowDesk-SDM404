@@ -109,7 +109,7 @@ function Sidebar() {
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-slate-200 bg-white">
       <div className="flex h-16 items-center px-5 border-b border-slate-100">
         <Link to="/dashboard">
-          <Logo prototype />
+          <Logo />
         </Link>
       </div>
 

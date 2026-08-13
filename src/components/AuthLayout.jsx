@@ -12,7 +12,7 @@ export default function AuthLayout({ children, footer }) {
 
       <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-10">
         <div className="mb-7">
-          <Logo size="lg" prototype />
+          <Logo size="lg" />
         </div>
         <div className="w-full max-w-md">{children}</div>
         {footer && <div className="mt-6 text-center text-[13px] text-slate-500">{footer}</div>}
