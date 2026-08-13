@@ -45,7 +45,7 @@ const INVITE_FIELD_MAP = { email: 'email', name: 'name', role: 'role' };
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Users() {
-  const { currentUser, role: myRole } = useApp();
+  const { currentUser, role: myRole, tenant } = useApp();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -74,9 +74,21 @@ export default function Users() {
   const roleOptions = Object.entries(ROLE_LABELS)
     .filter(([api]) => api !== 'system_admin' || myRole === 'System Admin');
 
+  // D-26: pin the list to the caller's OWN tenant. Without the param a
+  // system_admin receives every user in every tenant (contract §4.4 —
+  // ?tenant_id= is honoured for that role); for a tenant_admin the param is
+  // silently ignored, so one code path is correct for both. Real tenant ids
+  // are UUIDs — the mock fallback id ('t-001') must never reach the API,
+  // since a non-UUID query param is a framework 422.
+  const tenantId = tenant?.id && tenant.id.length === 36 ? tenant.id : undefined;
+
   useEffect(() => {
+    // No request until the real identity has resolved — firing early would
+    // send one unpinned call, which for a system_admin briefly lists every
+    // tenant (the exact D-26 symptom).
+    if (!tenantId) return undefined;
     let active = true;
-    listUsers({ limit: 100 })
+    listUsers({ limit: 100, tenant_id: tenantId })
       .then(({ users: rows }) => { if (active) setUsers(rows); })
       .catch((err) => {
         if (!active) return;
@@ -88,7 +100,7 @@ export default function Users() {
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [tenantId]);
 
   const replaceUser = (u) => setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
   const flashNotice = (text) => {
