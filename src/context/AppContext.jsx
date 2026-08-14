@@ -212,12 +212,23 @@ export function AppProvider({ children }) {
 
   const clearAuthNotice = useCallback(() => setAuthNotice(''), []);
 
+  // Re-pull /me on demand — e.g. after a workspace rename (AB#31), so the
+  // sidebar tenant chip shows the saved name without a re-login.
+  const refreshIdentity = useCallback(async () => {
+    try {
+      setAuthUser(await getMe());
+    } catch {
+      // Non-fatal — keep the identity we already have.
+    }
+  }, []);
+
   const value = {
     authLoading,
     isAuthenticated,
     meStatus,
     authNotice,
     clearAuthNotice,
+    refreshIdentity,
     role,
     previewRole,
     setPreviewRole,

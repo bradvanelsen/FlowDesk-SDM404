@@ -18,7 +18,6 @@ const NAV = {
     { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
     { label: 'Tenants', to: '/tenants', icon: Building2, match: (p) => p.startsWith('/tenants') },
     { label: 'Users', to: '/users', icon: UsersIcon, match: (p) => p.startsWith('/users') },
-    { label: 'Settings', to: '/settings', icon: Settings, match: (p) => p.startsWith('/settings') },
   ],
   'Tenant Admin': [
     { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
@@ -27,6 +26,9 @@ const NAV = {
     { label: 'Users', to: '/users', icon: UsersIcon, match: (p) => p.startsWith('/users') },
     { label: 'Categories', to: '/categories', icon: Tags, match: (p) => p.startsWith('/categories') },
     { label: 'Notifications', to: '/notifications', icon: Bell, match: (p) => p.startsWith('/notifications') },
+    // Workspace settings are tenant_admin ONLY (contract §4.10; system_admin
+    // is excluded — D-6), so the nav item lives here, not in the SA menu.
+    { label: 'Settings', to: '/settings', icon: Settings, match: (p) => p.startsWith('/settings') },
   ],
   Staff: [
     { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
